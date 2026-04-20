@@ -1,0 +1,38 @@
+name: weekly-run
+
+# Triggers:
+#  - Cron: every Monday at 09:00 UTC
+#  - Manual: any time from the Actions tab ("Run workflow")
+on:
+  schedule:
+    - cron: "0 9 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: gbp-edge-research-blog
+  cancel-in-progress: false
+
+jobs:
+  run-agent:
+    runs-on: ubuntu-latest
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      FLY_APP: gbp-edge-research-blog
+    steps:
+      - name: Setup flyctl
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Run agent on a one-shot Fly machine
+        # `fly machine run --rm` creates a fresh machine, runs the container,
+        # waits for it to exit, and auto-deletes it. Volume stays attached
+        # during the run so any writes to /app/data persist across weeks.
+        run: |
+          flyctl machine run \
+            --rm \
+            --app "$FLY_APP" \
+            --region cdg \
+            --vm-size shared-cpu-1x \
+            --vm-memory 2048 \
+            --volume gerb_data:/app/data \
+            --restart no \
+            registry.fly.io/${FLY_APP}:latest

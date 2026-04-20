@@ -1,0 +1,8 @@
+[phases.setup]
+aptPkgs = ["git", "ca-certificates"]
+
+[phases.install]
+cmds = ["npm ci"]
+
+[start]
+cmd = "npx tsx src/index.ts"
