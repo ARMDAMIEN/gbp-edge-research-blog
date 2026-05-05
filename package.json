@@ -9,8 +9,8 @@
     "gsc:token": "npx tsx scripts/get-gsc-refresh-token.ts"
   },
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "^0.2.92",
-    "@anthropic-ai/claude-code": "^2.1.104",
+    "@anthropic-ai/claude-agent-sdk": "0.2.104",
+    "@anthropic-ai/claude-code": "2.1.104",
     "@notionhq/client": "^2.2.15",
     "dotenv": "^17.4.1",
     "googleapis": "^144.0.0",
