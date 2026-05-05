@@ -13,6 +13,7 @@ import { SYSTEM_PROMPT } from "./prompt.js";
 import { getActiveClients } from "./tools/getActiveClients.js";
 import { redditSearch } from "./tools/redditSearch.js";
 import { logResearchRow } from "./tools/logResearchRow.js";
+import { generateBlogImage } from "./tools/generateBlogImage.js";
 import { requestGscIndexation } from "./tools/requestGscIndexation.js";
 import { sendTelegramReport } from "./tools/sendTelegramReport.js";
 
@@ -101,6 +102,35 @@ const logResearchRowTool = tool(
   { annotations: { destructiveHint: false, openWorldHint: true } }
 );
 
+const generateBlogImageTool = tool(
+  "generate_blog_image",
+  "Generate a hero image with Gemini 2.5 Flash Image, convert to webp via sharp, and write it to the given absolute path inside the cloned client repo. Returns {ok, path, bytes, width, height} or {ok:false, error}. The image is saved directly to disk — do NOT pass it back through the agent.",
+  {
+    prompt: z.string().describe("Detailed image prompt in English. Describe subject, style, lighting, composition. Do not ask the model to render text."),
+    output_path: z.string().describe("Absolute path ending in .webp, inside the cloned client repo (e.g. /tmp/gbp-edge-blog-runs/<slug>/blog/images/<post-slug>.webp)"),
+    width: z.number().int().min(256).max(2048).optional(),
+    quality: z.number().int().min(40).max(95).optional(),
+  },
+  async (args) => {
+    console.log(`  🖼  generate_blog_image → ${args.output_path}`);
+    try {
+      const result = await generateBlogImage(args);
+      console.log(
+        result.ok
+          ? `    → ${result.bytes} B, ${result.width}x${result.height}`
+          : `    → FAILED: ${result.error}`
+      );
+      return { content: [{ type: "text" as const, text: JSON.stringify(result) }] };
+    } catch (err) {
+      return {
+        content: [{ type: "text" as const, text: `generate_blog_image failed: ${err}` }],
+        isError: true,
+      };
+    }
+  },
+  { annotations: { destructiveHint: false, openWorldHint: true } }
+);
+
 const requestGscIndexationTool = tool(
   "request_gsc_indexation",
   "POST a URL to the Google Search Console Indexing API (URL_UPDATED). Best-effort: failures are expected if the SA is not verified for the site; they are NON-fatal.",
@@ -176,6 +206,7 @@ const mcpServer = createSdkMcpServer({
     getActiveClientsTool,
     redditSearchTool,
     logResearchRowTool,
+    generateBlogImageTool,
     requestGscIndexationTool,
     sendTelegramReportTool,
   ],
