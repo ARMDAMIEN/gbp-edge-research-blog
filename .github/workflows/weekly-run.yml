@@ -1,38 +1,96 @@
 name: weekly-run
 
-# Triggers:
-#  - Cron: every Monday at 09:00 UTC
-#  - Manual: any time from the Actions tab ("Run workflow")
 on:
   schedule:
+    # Every Monday at 09:00 UTC — wakes the Fly machine for the weekly run.
     - cron: "0 9 * * 1"
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "scripts/**"
+      - "package.json"
+      - "package-lock.json"
+      - "Dockerfile"
+      - "fly.toml"
+      - "tsconfig.json"
   workflow_dispatch:
+    inputs:
+      mode:
+        description: "What to do"
+        required: true
+        default: "run"
+        type: choice
+        options:
+          - run         # start the canonical Fly machine (no rebuild)
+          - deploy      # rebuild + push image to Fly registry
+          - deploy-run  # rebuild then immediately run
 
 concurrency:
   group: gbp-edge-research-blog
   cancel-in-progress: false
 
-jobs:
-  run-agent:
-    runs-on: ubuntu-latest
-    env:
-      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-      FLY_APP: gbp-edge-research-blog
-    steps:
-      - name: Setup flyctl
-        uses: superfly/flyctl-actions/setup-flyctl@master
+env:
+  FLY_APP: gbp-edge-research-blog
+  FLY_IMAGE: registry.fly.io/gbp-edge-research-blog:latest
 
-      - name: Run agent on a one-shot Fly machine
-        # `fly machine run --rm` creates a fresh machine, runs the container,
-        # waits for it to exit, and auto-deletes it. Volume stays attached
-        # during the run so any writes to /app/data persist across weeks.
+jobs:
+  deploy:
+    name: Build & push image, update machine
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && (inputs.mode == 'deploy' || inputs.mode == 'deploy-run'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: Build & push image
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: flyctl deploy --build-only --push --remote-only --image-label latest --app "$FLY_APP"
+      - name: Update existing machine to new image
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: |
-          flyctl machine run \
-            --rm \
-            --app "$FLY_APP" \
-            --region cdg \
-            --vm-size shared-cpu-1x \
-            --vm-memory 2048 \
-            --volume gerb_data:/app/data \
-            --restart no \
-            registry.fly.io/${FLY_APP}:latest
+          ID=$(flyctl machines list --app "$FLY_APP" --json | jq -r '[.[] | select(.config.mounts != null)][0].id')
+          if [ -z "$ID" ] || [ "$ID" = "null" ]; then
+            echo "::error::No volume-attached machine found on $FLY_APP. Run 'fly deploy' once locally to bootstrap."
+            exit 1
+          fi
+          echo "Updating machine $ID → $FLY_IMAGE"
+          flyctl machine update "$ID" --image "$FLY_IMAGE" --restart no --app "$FLY_APP" --yes
+
+  run:
+    name: Wake Fly machine for weekly run
+    needs: [deploy]
+    if: |
+      always()
+      && (needs.deploy.result == 'success' || needs.deploy.result == 'skipped')
+      && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && (inputs.mode == 'run' || inputs.mode == 'deploy-run')))
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: Start machine and wait for it to exit
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          ID=$(flyctl machines list --app "$FLY_APP" --json | jq -r '[.[] | select(.config.mounts != null)][0].id')
+          if [ -z "$ID" ] || [ "$ID" = "null" ]; then
+            echo "::error::No volume-attached machine found on $FLY_APP."
+            exit 1
+          fi
+          echo "Starting machine $ID"
+          flyctl machine start "$ID" --app "$FLY_APP"
+
+          for i in $(seq 1 120); do
+            STATE=$(flyctl machines list --app "$FLY_APP" --json \
+              | jq -r --arg id "$ID" '.[] | select(.id == $id) | .state')
+            echo "[$(date -u +%H:%M:%S)] machine state: ${STATE:-<unknown>}"
+            if [ "$STATE" = "stopped" ]; then
+              echo "Machine exited cleanly."
+              exit 0
+            fi
+            sleep 15
+          done
+          echo "::error::Machine still running after 30 min — check 'fly logs --app $FLY_APP'"
+          exit 1
