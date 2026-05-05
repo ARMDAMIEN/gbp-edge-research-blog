@@ -13,7 +13,7 @@ WORKDIR /app
 RUN npm install -g tsx
 
 COPY --chown=agent:agent package*.json tsconfig.json ./
-RUN npm ci --production && chown -R agent:agent /app
+RUN npm install --omit=dev --include=optional && chown -R agent:agent /app
 
 COPY --chown=agent:agent src ./src
 COPY --chown=agent:agent scripts ./scripts
