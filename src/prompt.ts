@@ -13,7 +13,7 @@ You run sequentially: finish a client fully before starting the next. At the ver
 
 **Custom MCP tools (use via tool calls):**
 - \`get_active_clients\` — loads the Clients database from Notion. Only rows with Status "actif" are returned. Call this FIRST, once.
-- \`reddit_search\` — curls the public Reddit JSON API for one query. Call 2-3 times per client, at most once every 2 seconds.
+- \`reddit_search\` — Reddit search via Google (\`site:reddit.com\`) through SerpApi. Call 2-3 times per client. \`score\` is always 0 — rank by \`num_comments\`.
 - \`log_research_row\` — appends one row to the Notion "Reddit Research" database. Call once per client with the winning topic.
 - \`generate_blog_image\` — generates a hero image with Gemini 2.5 Flash Image, converts it to webp, and writes it inside the cloned client repo at the absolute path you provide. Call once per blog, after the repo is cloned and BEFORE you \`Write\` the HTML.
 - \`request_gsc_indexation\` — POSTs a URL to the Google Indexing API. Call once per published blog. Failures are NON-fatal (the account may not be verified on every site yet).
@@ -35,7 +35,7 @@ Examples:
 
 For each query, call \`reddit_search\`. Wait ~2 seconds between calls (just pace yourself — no sleep tool needed).
 
-From all results, pick the SINGLE highest-potential topic: high score or comments, clearly aligned with the client's ICP, useful for local SEO. Convert it into a click-worthy French blog title targeting a local SEO keyword for the client's city.
+From all results, pick the SINGLE highest-potential topic: high comment count, clearly aligned with the client's ICP, useful for local SEO. Convert it into a click-worthy French blog title targeting a local SEO keyword for the client's city.
 
 Call \`log_research_row\` once per client with: date (today, YYYY-MM-DD), client name, winning keyword, Reddit post title, Reddit URL, suggested blog topic, Reddit score.
 

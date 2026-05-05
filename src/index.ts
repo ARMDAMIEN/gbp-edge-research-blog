@@ -53,7 +53,7 @@ const getActiveClientsTool = tool(
 
 const redditSearchTool = tool(
   "reddit_search",
-  "Search Reddit's public JSON API for a single keyword. Returns up to `limit` posts sorted by relevance in the given time window.",
+  "Search Reddit (via Google `site:reddit.com` through SerpApi) for a single keyword. Returns up to `limit` posts sorted by Google relevance in the given time window. Note: `score` is always 0 (upvotes not exposed via Google) — rank by `num_comments` instead.",
   {
     keyword: z.string().describe("Search query (French keywords are fine)"),
     time_filter: z.enum(["hour", "day", "week", "month", "year", "all"]).default("month"),

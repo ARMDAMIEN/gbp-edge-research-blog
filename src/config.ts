@@ -22,7 +22,7 @@ export const CLAUDE_MODEL = process.env.CLAUDE_MODEL ?? "claude-opus-4-6";
 export const GEMINI_API_KEY = process.env.GEMINI_API_KEY ?? "";
 export const GEMINI_IMAGE_MODEL =
   process.env.GEMINI_IMAGE_MODEL ?? "gemini-2.5-flash-image";
-export const REDDIT_UA = "gbp-edge-research-agent/1.0";
+export const SERPAPI_API_KEY = process.env.SERPAPI_API_KEY ?? "";
 export const WORKDIR_ROOT = process.env.WORKDIR_ROOT ?? "/tmp/gbp-edge-blog-runs";
 
 export const DATA_DIR = new URL("../data/", import.meta.url).pathname;
