@@ -2,8 +2,8 @@ name: weekly-run
 
 on:
   schedule:
-    # Every Monday at 09:00 UTC — wakes the Fly machine for the weekly run.
-    - cron: "0 9 * * 1"
+    # Every Sunday at 09:00 UTC (11:00 France CEST) — wakes the Fly machine for the weekly run.
+    - cron: "0 9 * * 0"
   push:
     branches: [main]
     paths:
