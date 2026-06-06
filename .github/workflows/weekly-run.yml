@@ -79,6 +79,12 @@ jobs:
             echo "::error::No volume-attached machine found on $FLY_APP."
             exit 1
           fi
+          # Re-apply the current secret release before waking. `machine start`
+          # alone never picks up staged secret changes (a rotated API key staged
+          # but never deployed is exactly what silently broke this for weeks).
+          echo "Re-applying secrets/image to machine $ID"
+          flyctl machine update "$ID" --image "$FLY_IMAGE" --restart no --app "$FLY_APP" --yes
+
           echo "Starting machine $ID"
           flyctl machine start "$ID" --app "$FLY_APP"
 
@@ -87,8 +93,18 @@ jobs:
               | jq -r --arg id "$ID" '.[] | select(.id == $id) | .state')
             echo "[$(date -u +%H:%M:%S)] machine state: ${STATE:-<unknown>}"
             if [ "$STATE" = "stopped" ]; then
-              echo "Machine exited cleanly."
-              exit 0
+              # "stopped" only means the process exited — it says nothing about
+              # success. Read the actual exit code and fail the job on non-zero,
+              # otherwise a crash looks identical to a clean run (the original bug).
+              EXIT_CODE=$(flyctl machines list --app "$FLY_APP" --json \
+                | jq -r --arg id "$ID" '.[] | select(.id == $id) | [.events[]? | select(.type == "exit")][0].request.exit_event.exit_code // "unknown"')
+              echo "Machine stopped with exit_code=$EXIT_CODE"
+              if [ "$EXIT_CODE" = "0" ]; then
+                echo "Weekly run completed successfully."
+                exit 0
+              fi
+              echo "::error::Weekly run FAILED (exit_code=$EXIT_CODE). Check 'fly logs --app $FLY_APP'."
+              exit 1
             fi
             sleep 15
           done

@@ -1,6 +1,11 @@
 app = 'gbp-edge-research-blog'
 primary_region = 'cdg'
 
+# One-shot weekly job: the machine runs `tsx src/index.ts` once and exits.
+# It must NOT auto-restart on exit (success or crash), or it would loop.
+[[restart]]
+  policy = 'never'
+
 [build]
 
 [[vm]]
