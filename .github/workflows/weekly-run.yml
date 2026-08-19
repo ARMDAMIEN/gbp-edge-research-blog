@@ -1,9 +1,13 @@
 name: weekly-run
 
 on:
-  schedule:
-    # Every Sunday at 09:00 UTC (11:00 France CEST) — wakes the Fly machine for the weekly run.
-    - cron: "0 9 * * 0"
+  # PAUSED 2026-08-19 - migrating this agent to a Claude Code routine
+  # (subscription-based) instead of the metered Anthropic API. The deploy path
+  # below is intact: use `workflow_dispatch` for a manual deploy/run, and
+  # re-enable the weekly cron by uncommenting the `schedule:` block.
+  # schedule:
+  #   # Every Sunday at 09:00 UTC (11:00 France CEST) — wakes the Fly machine for the weekly run.
+  #   - cron: "0 9 * * 0"
   push:
     branches: [main]
     paths:
@@ -102,6 +106,18 @@ jobs:
               if [ "$EXIT_CODE" = "0" ]; then
                 echo "Weekly run completed successfully."
                 exit 0
+              fi
+              # Fly frequently records a null exit_code ("unknown") even for a
+              # perfectly clean exit — the one-shot machine reboots before the
+              # code lands in the exit event. Treating that as failure made every
+              # successful weekly run look red. Before failing, confirm against the
+              # app's own clean-exit marker in the logs (init prints this only when
+              # the main process returned 0).
+              if [ "$EXIT_CODE" = "unknown" ]; then
+                if flyctl logs --app "$FLY_APP" --no-tail 2>/dev/null | grep -q "exited normally with code: 0"; then
+                  echo "exit_code unavailable, but the app logged a clean exit — treating as success."
+                  exit 0
+                fi
               fi
               echo "::error::Weekly run FAILED (exit_code=$EXIT_CODE). Check 'fly logs --app $FLY_APP'."
               exit 1
